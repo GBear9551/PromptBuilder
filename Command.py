@@ -1,3 +1,9 @@
+from Null import NullObject
+import asyncio
+import threading
+import aiohttp
+
+
 class Command:
     def execute(self):
         pass
@@ -5,18 +11,16 @@ class Command:
     def undo(self):
         pass
 
+
 class SendToOpenAICommand(Command):
     def __init__(self, receiver, data):
         self._receiver = receiver
         self._data = data
+        print('called')
 
-    def execute(self):
-        # Send data to save
-        self._receiver.send_to_openai(self._data)
-
-    def undo(self):
-        # Undo logic, if applicable
-        pass
+    async def execute(self):
+        print('called')
+        await self._receiver.async_send_to_openai(self._data)
 
 
 class ModifyPromptCommand(Command):
@@ -46,6 +50,17 @@ class CommandInvoker:
         command.execute()
         self._current += 1
 
+    async def async_store_and_execute(self, command):
+        print('Invoker async_store_and_execute called')
+        self._commands.append(command)
+        if asyncio.iscoroutinefunction(command.execute):
+            
+            await command.execute()
+        else:
+            
+            command.execute()
+            self._current += 1
+
     def undo(self):
         if self._current >= 0:
             self._commands[self._current].undo()
@@ -57,22 +72,35 @@ class CommandInvoker:
             self._commands[self._current].execute()
 
 
+
 class Receiver:
-    def __init__(self):
+    def __init__(self, api_key):
         self.prompt = ""
+        self.api_key = api_key
+        self.response = None  # Store the response
 
-    def send_to_openai(self, data):
-        # Code to send data to OpenAI
-        print("Sending to OpenAI:", data)
+    async def async_send_to_openai(self, user_input):
+        print('async send to openai called.')
+        async with aiohttp.ClientSession() as session:
+            url = "https://api.openai.com/v1/engines/davinci/completions"
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            data = {"prompt": user_input, "max_tokens": 150}
+            
+            async with session.post(url, headers=headers, json=data) as response:
+                if response.status == 200:
+                    self.response = await response.json()  # Assuming JSON response
+                else:
+                    self.response = {"error": "Error in API response"}
 
-    def modify_prompt(self, new_prompt):
-        # Code to modify the prompt
-        print("Modifying prompt:", new_prompt)
-        self.prompt = new_prompt
 
-    # Additional methods to modify local code, save points, etc.
 
-    '''
+
+
+
+
+
+
+'''
     # Client code
     if __name__ == "__main__":
         receiver = Receiver()
@@ -85,4 +113,4 @@ class Receiver:
         invoker.store_and_execute(modify_command)
     
     
-    '''
+ ''' 
